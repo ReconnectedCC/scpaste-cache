@@ -13,7 +13,8 @@ const PASTES_DIR = path.join(__dirname, 'pastes');
 
 // Sanitize and construct file paths
 const sanitizeId = (id) => {
-    const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '');
+    let sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '');
+    sanitized = sanitized.replace("-deleted",'');
     if (sanitized !== id) {
         throw new Error('Invalid ID');
     }
@@ -70,7 +71,7 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
                     onSuccess(Buffer.concat(data).toString(), res.headers);
                 } else if (res.statusCode === 404) {
                     if(fs.existsSync(getFilePath(pasteId))) {
-                        fs.unlink(getFilePath(pasteId), () => {
+                        fs.rename(getFilePath(pasteId), getFilePath(pasteId) + "-deleted", () => {
                             onError(`Paste not found (status: ${res.statusCode})`);
                         });
                     }
