@@ -24,7 +24,6 @@ const sanitizeId = (id) => {
     sanitized = sanitized.replace("-deleted",'');
     if (sanitized !== id) {
         return "ERR-INVALID-ID"
-
     }
     if (sanitized.length >= maxPasteIDLength) {
         return "ERR-TOO-LONG-ID"
@@ -66,7 +65,9 @@ const ensureDirectoryExists = async () => {
 // Async helper function to write a file
 const saveFile = async (filePath, content) => {
     try {
-        await fs.promises.writeFile(filePath, content);
+        if(!(filePath === "ERR-INVALID-ID" || filePath === "ERR-TOO-LONG-ID")) {
+            await fs.promises.writeFile(filePath, content);
+        }
     } catch (error) {
         throw new Error('Failed to write file: ' + error.message);
     }
