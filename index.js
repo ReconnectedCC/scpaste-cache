@@ -70,11 +70,15 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
                 if (res.statusCode === 200) {
                     onSuccess(Buffer.concat(data).toString(), res.headers);
                 } else if (res.statusCode === 404) {
-                    if(fs.existsSync(getFilePath(pasteId))) {
-                        fs.rename(getFilePath(pasteId), getFilePath(pasteId) + "-deleted", () => {
+                    let filePath = getFilePath(pasteId);
+                    if(fs.existsSync(filePath)) {
+                        fs.rename(filePath, filePath + "-deleted", () => {
                             onError(`Paste not found (status: ${res.statusCode})`);
                         });
+                    } else {
+                        onError(`Paste not found (status: ${res.statusCode})`);
                     }
+
                 } else {
                     onError(`Paste not found (status: ${res.statusCode})`);
                 }
