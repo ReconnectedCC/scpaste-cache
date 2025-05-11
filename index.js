@@ -10,6 +10,10 @@ const softdeletion = process.env.softdeletion || true;
 const maxPasteIDLength = process.env.maxpasteidlength || 10;
 const agent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL verification
 
+let startupTime
+let downloads = 0;
+let deletions = 0;
+
 
 // Define the directory for paste storage
 const PASTES_DIR = path.join(__dirname, 'pastes');
@@ -83,12 +87,14 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
             res.on('end', () => {
                 if (res.statusCode === 200) {
                     console.log("Successfully got paste content for " + pasteId);
+                    downloads += 1;
                     onSuccess(Buffer.concat(data).toString(), res.headers);
                 } else if (res.statusCode === 404) {
                     let filePath = getFilePath(pasteId);
                     if(fs.existsSync(filePath) && softdeletion) {
                         fs.rename(filePath, filePath + "-deleted", () => {
                             console.log("Soft-deleted paste for " + pasteId);
+                            deletions += 1;
                             onError(`Paste not found (status: ${res.statusCode})`);
                         });
                     } else {
@@ -115,6 +121,19 @@ app.get('/api/v1/pastes/:id/cache', async (req, res) => {
         res.status(500).send('Paste not found.');
     }
 });
+
+app.get("/api/v1/health", (req, res) => {
+    const amountCached = fs.readdirSync(PASTES_DIR).length
+
+
+    res.status(200).send({
+        uptime: Date.now() - startupTime,
+        downloads: downloads,
+        deletions: deletions,
+        amountcached: amountCached,
+        status: "ok",
+    });
+})
 
 // Route to fetch live or cached paste content
 app.get('/api/v1/pastes/:id/raw', async (req, res) => {
