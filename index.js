@@ -6,6 +6,7 @@ const app = express();
 
 const port = process.env.PORT || 3000;
 const softdeletion = process.env.softdeletion || true;
+const maxPasteIDLength = process.env.maxpasteidlength || 10;
 const agent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL verification
 
 
@@ -20,7 +21,7 @@ const sanitizeId = (id) => {
         return "ERR-INVALID-ID"
 
     }
-    if (sanitized.length > 50) {
+    if (sanitized.length >= maxPasteIDLength) {
         return "ERR-TOO-LONG-ID"
     }
     return sanitized;
