@@ -5,6 +5,8 @@ const path = require('path');
 const app = express();
 
 const port = process.env.PORT || 3000;
+const agent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL verification
+
 
 // Define the directory for paste storage
 const PASTES_DIR = path.join(__dirname, 'pastes');
@@ -66,6 +68,12 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
             res.on('end', () => {
                 if (res.statusCode === 200) {
                     onSuccess(Buffer.concat(data).toString(), res.headers);
+                } else if (res.statusCode === 404) {
+                    if(fs.existsSync(getFilePath(pasteId))) {
+                        fs.unlink(getFilePath(pasteId), () => {
+                            onError(`Paste not found (status: ${res.statusCode})`);
+                        });
+                    }
                 } else {
                     onError(`Paste not found (status: ${res.statusCode})`);
                 }
@@ -77,41 +85,12 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
 };
 
 // Route to get cached paste content
-app.get('/api/v1/pastes/:id', async (req, res) => {
+app.get('/api/v1/pastes/:id/cache', async (req, res) => {
     try {
         const filePath = getFilePath(req.params.id);
         readFile(filePath, res);
     } catch (err) {
-        console.error('Error in GET /api/v1/pastes/:id:', err.message);
-        res.status(500).send('An error occurred while processing your request.');
-    }
-});
-
-// Route to fetch and cache paste content
-app.post('/api/v1/pastes/:id', async (req, res) => {
-    const pasteId = req.params.id;
-
-    try {
-        await ensureDirectoryExists();
-        fetchPasteContent(
-            pasteId, req.headers,
-            async (content, headers) => {
-                try {
-                    await saveFile(getFilePath(pasteId), content);
-                    res.headers = headers;
-                    res.status(200).send('ok');
-                } catch (err) {
-                    console.error('Error saving file:', err.message);
-                    res.status(500).send('Failed to cache paste content.');
-                }
-            },
-            (errorMessage) => {
-                console.error(errorMessage);
-                res.status(500).send('Failed to fetch paste content.');
-            }
-        );
-    } catch (err) {
-        console.error('Error in POST /api/v1/pastes/:id:', err.message);
+        console.error('Error in GET /api/v1/pastes/:id/cache:', err.message);
         res.status(500).send('An error occurred while processing your request.');
     }
 });
