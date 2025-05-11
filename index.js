@@ -80,11 +80,13 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
             res.on('data', (chunk) => data.push(chunk));
             res.on('end', () => {
                 if (res.statusCode === 200) {
+                    console.log("Successfully got paste content for " + pasteId);
                     onSuccess(Buffer.concat(data).toString(), res.headers);
                 } else if (res.statusCode === 404) {
                     let filePath = getFilePath(pasteId);
                     if(fs.existsSync(filePath) && softdeletion) {
                         fs.rename(filePath, filePath + "-deleted", () => {
+                            console.log("Soft-deleted paste for " + pasteId);
                             onError(`Paste not found (status: ${res.statusCode})`);
                         });
                     } else {
