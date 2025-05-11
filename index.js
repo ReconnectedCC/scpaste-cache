@@ -1,103 +1,153 @@
-const express = require('express')
+const express = require('express');
 const fs = require('fs');
 const https = require('https');
+const path = require('path');
+const app = express();
 
+const port = process.env.PORT || 3000;
 
-const app = express()
-const port = 3000
+// Define the directory for paste storage
+const PASTES_DIR = path.join(__dirname, 'pastes');
 
-app.get('/paste/:id', (req, res) => {
-    fs.readFile("./pastes/" + req.params.id, (err, data) => {
+// Sanitize and construct file paths
+const sanitizeId = (id) => {
+    const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (sanitized !== id) {
+        throw new Error('Invalid ID');
+    }
+    return sanitized;
+};
+
+const getFilePath = (id) => path.join(PASTES_DIR, sanitizeId(id));
+
+// Helper function to read a file
+const readFile = (filePath, res, notFoundMessage = 'Not found in cache') => {
+    fs.readFile(filePath, (err, data) => {
         if (!err && data) {
-            res.statusCode = 200;
-            res.send(data)
+            res.status(200).send(data);
         } else {
-            res.statusCode = 404;
-            res.send('Not found in cache')
-
+            res.status(404).send(notFoundMessage);
         }
     });
-})
+};
 
-app.post('/paste/:id', (req, res) => {
+// Async helper function to ensure pastes directory exists
+const ensureDirectoryExists = async () => {
+    try {
+        if (!(await fs.promises.stat(PASTES_DIR).catch(() => false))) {
+            await fs.promises.mkdir(PASTES_DIR, { recursive: true });
+        }
+    } catch (error) {
+        console.error('Failed to create directory:', error.message);
+    }
+};
 
-    https.get('https://p.sc3.io/api/v1/pastes/' + req.params.id + "/raw", httpres => {
-        let data = [];
-        const headerDate = httpres.headers && httpres.headers.date ? httpres.headers.date : 'no response date';
-        console.log('Status Code:', httpres.statusCode);
-        console.log('Date in Response header:', headerDate);
+// Async helper function to write a file
+const saveFile = async (filePath, content) => {
+    try {
+        await fs.promises.writeFile(filePath, content);
+    } catch (error) {
+        throw new Error('Failed to write file: ' + error.message);
+    }
+};
 
-        httpres.on('data', chunk => {
-            data.push(chunk);
-        });
 
-        httpres.on('end', () => {
-            console.log('Response ended: ');
-            const content = Buffer.concat(data).toString();
-            if (!fs.existsSync('./pastes')) {
-                fs.mkdir(
-                    './pastes',
-                    err => {
-                        if (err) {
-                            console.error(err);
-                        }
-                    })
-            }
-            fs.writeFileSync('./pastes/' + req.params.id, content);
-            res.statusCode = 200;
-            res.send('ok');
-        });
-    }).on('error', err => {
-        console.log('Error: ', err.message);
-    });
-})
-
-app.get("/api/v1/pastes/:id/raw", (req, res) => {
-    https.get('https://p.sc3.io/api/v1/pastes/' + req.params.id + "/raw", httpres => {
-        let data = [];
-        const headerDate = httpres.headers && httpres.headers.date ? httpres.headers.date : 'no response date';
-        console.log('Status Code:', httpres.statusCode);
-        console.log('Date in Response header:', headerDate);
-
-        httpres.on('data', chunk => {
-            data.push(chunk);
-        });
-
-        httpres.on('end', () => {
-            console.log('Response ended: ');
-            const content = Buffer.concat(data).toString();
-            if (!fs.existsSync('./pastes')) {
-                fs.mkdir(
-                    './pastes',
-                    err => {
-                        if (err) {
-                            console.error(err);
-                        }
-                    })
-            }
-            if (httpres.statusCode == 404) {
-                res.statusCode = 404;
-                res.send('Not found in scpaste')
-                return;
-            } else
-                res.statusCode = 200;
-                res.send(content);
-                fs.writeFileSync('./pastes/' + req.params.id, content);
+// Helper function to fetch data from external API
+const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
+    let options = {
+        method: 'GET',
+        host: 'p.sc3.io',
+        path: `/api/v1/pastes/${pasteId}/raw`,
+        headers: headers
+    }
+    https.get(`https://p.sc3.io/api/v1/pastes/${pasteId}/raw`, (res) => {
+            let data = [];
+            res.on('data', (chunk) => data.push(chunk));
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    onSuccess(Buffer.concat(data).toString(), res.headers);
+                } else {
+                    onError(`Paste not found (status: ${res.statusCode})`);
+                }
             });
-    }).on('error', err => {
-        fs.readFile("./pastes/" + req.params.id, (err, data) => {
-            if (!err && data) {
-                res.statusCode = 200;
-                res.send(data)
-            } else {
-                res.statusCode = 404;
-                res.send('Not found in cache and scpaste is offline')
-
-            }
+        })
+        .on('error', (err) => {
+            onError(err.message);
         });
-    });
-})
+};
 
+// Route to get cached paste content
+app.get('/api/v1/pastes/:id', async (req, res) => {
+    try {
+        const filePath = getFilePath(req.params.id);
+        readFile(filePath, res);
+    } catch (err) {
+        console.error('Error in GET /api/v1/pastes/:id:', err.message);
+        res.status(500).send('An error occurred while processing your request.');
+    }
+});
+
+// Route to fetch and cache paste content
+app.post('/api/v1/pastes/:id', async (req, res) => {
+    const pasteId = req.params.id;
+
+    try {
+        await ensureDirectoryExists();
+        fetchPasteContent(
+            pasteId, req.headers,
+            async (content, headers) => {
+                try {
+                    await saveFile(getFilePath(pasteId), content);
+                    res.headers = headers;
+                    res.status(200).send('ok');
+                } catch (err) {
+                    console.error('Error saving file:', err.message);
+                    res.status(500).send('Failed to cache paste content.');
+                }
+            },
+            (errorMessage) => {
+                console.error(errorMessage);
+                res.status(500).send('Failed to fetch paste content.');
+            }
+        );
+    } catch (err) {
+        console.error('Error in POST /api/v1/pastes/:id:', err.message);
+        res.status(500).send('An error occurred while processing your request.');
+    }
+});
+
+// Route to fetch live or cached paste content
+app.get('/api/v1/pastes/:id/raw', async (req, res) => {
+    const pasteId = req.params.id;
+
+    try {
+        await ensureDirectoryExists();
+        fetchPasteContent(
+            pasteId, req.headers,
+            async (content, headers) => {
+                try {
+                    await saveFile(getFilePath(pasteId), content);
+                    res.headers = headers;
+                    res.status(200).send(content);
+                } catch (err) {
+                    console.error('Error saving file:', err.message);
+                    res.status(500).send('Failed to cache paste content.');
+                }
+            },
+            (errorMessage) => {
+                console.error(errorMessage);
+                const filePath = getFilePath(pasteId);
+                // Fallback to cached copy
+                readFile(filePath, res, 'Content not found live or in cache');
+            }
+        );
+    } catch (err) {
+        console.error('Error in GET /api/v1/pastes/:id/raw:', err.message);
+        res.status(500).send('An error occurred while processing your request.');
+    }
+});
+
+// Start the server
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+    console.log(`Server running at http://localhost:${port}`);
+});
