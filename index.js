@@ -5,6 +5,7 @@ const path = require('path');
 const app = express();
 
 const port = process.env.PORT || 3000;
+const softdeletion = process.env.softdeletion || true;
 const agent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL verification
 
 
@@ -71,7 +72,7 @@ const fetchPasteContent = (pasteId, headers, onSuccess, onError) => {
                     onSuccess(Buffer.concat(data).toString(), res.headers);
                 } else if (res.statusCode === 404) {
                     let filePath = getFilePath(pasteId);
-                    if(fs.existsSync(filePath)) {
+                    if(fs.existsSync(filePath) && softdeletion) {
                         fs.rename(filePath, filePath + "-deleted", () => {
                             onError(`Paste not found (status: ${res.statusCode})`);
                         });
