@@ -108,7 +108,7 @@ app.get('/api/v1/pastes/:id/cache', async (req, res) => {
         readFile(filePath, res);
     } catch (err) {
         console.error('Error in GET /api/v1/pastes/:id/cache:', err.message);
-        res.status(500).send('An error occurred while processing your request.');
+        res.status(500).send('Paste not found.');
     }
 });
 
@@ -134,7 +134,7 @@ app.get('/api/v1/pastes/:id/raw', async (req, res) => {
                 console.error(errorMessage);
                 const filePath = getFilePath(pasteId);
                 // Fallback to cached copy
-                readFile(filePath, res, 'Content not found live or in cache');
+                readFile(filePath, res, 'Paste not found.');
             }
         );
     } catch (err) {
