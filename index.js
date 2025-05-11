@@ -5,6 +5,7 @@ const path = require('path');
 const app = express();
 
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || "localhost"
 const softdeletion = process.env.softdeletion || true;
 const maxPasteIDLength = process.env.maxpasteidlength || 10;
 const agent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL verification
@@ -147,6 +148,7 @@ app.get('/api/v1/pastes/:id/raw', async (req, res) => {
 });
 
 // Start the server
-app.listen(port, "0.0.0.0", () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.listen(port, host, () => {
+    startupTime = Date.now();
+    console.log(`Server running at http://${host}:${port}`);
 });
