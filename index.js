@@ -17,12 +17,23 @@ const sanitizeId = (id) => {
     let sanitized = id.replace(/[^a-zA-Z0-9_-]/g, '');
     sanitized = sanitized.replace("-deleted",'');
     if (sanitized !== id) {
-        throw new Error('Invalid ID');
+        return "ERR-INVALID-ID"
+
+    }
+    if (sanitized.length > 50) {
+        return "ERR-TOO-LONG-ID"
     }
     return sanitized;
 };
 
-const getFilePath = (id) => path.join(PASTES_DIR, sanitizeId(id));
+const getFilePath = (id) => {
+    let sanitized = sanitizeId(id);
+    if(sanitized === "ERR-INVALID-ID" || sanitized === "ERR-TOO-LONG-ID") {
+        return sanitized;
+    } else {
+        return path.join(PASTES_DIR, sanitizeId(id));
+    }
+}
 
 // Helper function to read a file
 const readFile = (filePath, res, notFoundMessage = 'Not found in cache') => {
